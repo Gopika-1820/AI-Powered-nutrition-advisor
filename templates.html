@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Nutrition Advisor — Prototype</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; padding: 18px; background:#f7fafc; color:#111827;}
+    .card { background:white; padding:18px; border-radius:10px; box-shadow:0 6px 18px rgba(15,23,42,0.06); margin-bottom:16px;}
+    textarea { width:100%; height:90px; padding:8px; font-size:15px; border-radius:8px; border:1px solid #e5e7eb; resize:vertical; }
+    button { background:#2563eb; color:white; border:0; padding:10px 14px; border-radius:8px; cursor:pointer; }
+    table { width:100%; border-collapse: collapse; margin-top:12px;}
+    th, td { text-align:left; padding:8px; border-bottom:1px solid #eef2f7;}
+    .flag { padding:6px 8px; background:#fff7ed; border-radius:6px; display:inline-block; margin-right:6px; margin-bottom:6px; }
+    .suggest { padding:6px 8px; background:#ecfeff; border-radius:6px; display:inline-block; margin-right:6px; margin-bottom:6px; }
+    .small {font-size:13px; color:#6b7280;}
+  </style>
+</head>
+<body>
+  <h1>AI Nutrition Advisor — Prototype</h1>
+  <div class="card">
+    <label class="small">Enter what you ate (examples): <em>"2 eggs, 1 cup rice, banana"</em> or <em>"1 chapati and 100 g chicken"</em></label>
+    <textarea id="mealText" placeholder="Type your meal..."></textarea>
+    <div style="margin-top:8px;">
+      <button id="analyzeBtn">Analyze Meal</button>
+      <span id="busy" style="margin-left:10px; color:#6b7280;"></span>
+    </div>
+  </div>
+
+  <div id="resultArea"></div>
+
+<script>
+document.getElementById("analyzeBtn").addEventListener("click", async () => {
+  const txt = document.getElementById("mealText").value.trim();
+  const busy = document.getElementById("busy");
+  const resultArea = document.getElementById("resultArea");
+  resultArea.innerHTML = "";
+  if (!txt) {
+    alert("Please enter a meal description.");
+    return;
+  }
+  busy.textContent = "Analyzing...";
+  try {
+    const resp = await fetch("/analyze", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({meal_text: txt})
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      busy.textContent = "";
+      alert("Error: " + (err.error || resp.statusText));
+      return;
+    }
+    const data = await resp.json();
+    busy.textContent = "";
+
+    // Render parsed items
+    let html = "";
+    html += "<div class='card'><h3>Parsed items</h3>";
+    html += "<table><thead><tr><th>Raw</th><th>Matched food</th><th>Grams</th><th>Calories</th><th>Protein</th></tr></thead><tbody>";
+    data.parsed_items.forEach(it => {
+      html += `<tr><td>${it.raw}</td><td>${it.food_key}</td><td>${it.grams}</td><td>${it.nutrition.calories}</td><td>${it.nutrition.protein}</td></tr>`;
+    });
+    html += "</tbody></table></div>";
+
+    // Totals
+    html += "<div class='card'><h3>Totals</h3>";
+    html += "<table><tbody>";
+    const totals = data.totals;
+    html += `<tr><td>Calories</td><td>${totals.calories} kcal</td></tr>`;
+    html += `<tr><td>Protein</td><td>${totals.protein} g</td></tr>`;
+    html += `<tr><td>Carbs</td><td>${totals.carbs} g</td></tr>`;
+    html += `<tr><td>Fat</td><td>${totals.fat} g</td></tr>`;
+    html += `<tr><td>Fiber</td><td>${totals.fiber} g</td></tr>`;
+    html += `<tr><td>Vitamin C</td><td>${totals.vitamin_c} mg</td></tr>`;
+    html += "</tbody></table></div>";
+
+    // Flags & suggestions
+    html += "<div class='card'><h3>Flags & suggestions</h3>";
+    if (data.flags.length === 0) {
+      html += "<div class='small'>No major flags detected. Looks balanced for the nutrients we check.</div>";
+    } else {
+      html += data.flags.map(f => `<div class='flag'>${f}</div>`).join("");
+    }
+    if (data.suggestions && data.suggestions.length>0) {
+      html += "<div style='margin-top:12px'><strong>Suggestions:</strong><br>";
+      html += data.suggestions.map(s => `<div class='suggest'>${s}</div>`).join("");
+      html += "</div>";
+    }
+    html += "</div>";
+
+    resultArea.innerHTML = html;
+
+  } catch (e) {
+    busy.textContent = "";
+    alert("Request failed: " + e.message);
+  }
+});
+</script>
+</body>
+</html>
